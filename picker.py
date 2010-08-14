@@ -5,6 +5,27 @@ import time
 
 import gtk
 
+import hgtlib
+
+
+def get_patches():
+    start_point = None
+    patches = []
+    for line in open(hgtlib.get_patchlist_file(), "r"):
+        line = line.strip()
+        if line == "" or line.startswith("#"):
+            continue
+        ty, rest = line.split(" ", 1)
+        if ty == "Patch":
+            patches.append(rest.split(" ", 1))
+        elif ty == "Start":
+            assert start_point is None
+            start_point = rest
+        else:
+            raise Exception("Unknown tag: %r" % ty)
+    assert start_point is not None
+    return patches, start_point
+
 
 def main(args):
     git_dir = args[0]
@@ -12,14 +33,7 @@ def main(args):
     window = gtk.Window()
     window.set_default_size(500, 400)
 
-    proc = subprocess.Popen(["git", "log", "--pretty=oneline",
-                             "master", "edit-conflict", "^initial"],
-                            cwd=git_dir,
-                            stdout=subprocess.PIPE)
-    commits = []
-    for line in proc.stdout:
-        commits.append(line.rstrip("\n").split(" ", 1))
-    assert proc.wait() == 0
+    commits, start_point = get_patches()
 
     model = gtk.ListStore(object)
     rows = []
@@ -47,13 +61,15 @@ def main(args):
         # XXX: This could lose work
         subprocess.check_call(["git", "reset", "--hard"], cwd=git_dir)
 
-        subprocess.check_call(["git", "checkout", "initial"], cwd=git_dir)
+        # This is just to let us delete the "cp" branch.
+        subprocess.check_call(["git", "checkout", start_point], cwd=git_dir)
+
         subprocess.call(["git", "branch", "-D", "cp"], cwd=git_dir)
-        subprocess.check_call(["git", "checkout", "-b", "cp", "initial"],
+        subprocess.check_call(["git", "checkout", "-b", "cp", start_point],
                               cwd=git_dir)
         for row in rows:
             row["failing"] = False
-        for row in reversed(rows):
+        for row in rows:
             if row["apply"]:
                 rc = subprocess.call(["git", "cherry-pick", row["commit_id"]],
                                      cwd=git_dir)
@@ -103,6 +119,7 @@ def main(args):
 
     window.add(table)
     window.show_all()
+    window.connect("hide", lambda *args: sys.exit(0))
     gtk.main()
 
 
