@@ -9,25 +9,6 @@ import gtk
 import hgtlib
 
 
-def get_patches():
-    start_point = None
-    patches = []
-    for line in open(hgtlib.get_patchlist_file(), "r"):
-        line = line.strip()
-        if line == "" or line.startswith("#"):
-            continue
-        ty, rest = line.split(" ", 1)
-        if ty == "Patch":
-            patches.append(rest.split(" ", 1))
-        elif ty == "Start":
-            assert start_point is None
-            start_point = rest
-        else:
-            raise Exception("Unknown tag: %r" % ty)
-    assert start_point is not None
-    return patches, start_point
-
-
 def main(args):
     if len(args) == 0:
         git_dir = os.getcwd()
@@ -37,16 +18,15 @@ def main(args):
         raise Exception("Too many arguments")
 
     window = gtk.Window()
-    window.set_default_size(500, 400)
+    window.set_default_size(600, 500)
 
-    commits, start_point = get_patches()
+    rows, start_point = hgtlib.get_patches()
+    applylist = hgtlib.get_applylist()
 
     model = gtk.ListStore(object)
-    rows = []
-    for commit_id, desc in commits:
-        row = {"commit_id": commit_id, "msg": desc, "apply": False,
-               "failing": False}
-        rows.append(row)
+    for row in rows:
+        row["apply"] = applylist.setdefault(row["commit_id"], True)
+        row["failing"] = False
         model.append([row])
 
     def map_cell(col, cell, prop, func):
@@ -62,10 +42,26 @@ def main(args):
                 cell.set_property(prop, func(row))
         col.set_cell_data_func(cell, setter)
 
+    def save_applylist():
+        filename = os.path.join(hgtlib.dotgit_dir(), "hgt-applylist")
+        tmp_filename = "%s.new" % filename
+        fh = open(tmp_filename, "w")
+        for row in rows:
+            tag = {True: "Apply",
+                   False: "Unapply"}[row["apply"]]
+            fh.write("%s %s %s\n" % (tag, row["commit_id"], row["msg"]))
+        fh.close()
+        os.rename(tmp_filename, filename)
+
     def apply_patches():
         t0 = time.time()
-        # XXX: This could lose work
-        subprocess.check_call(["git", "reset", "--hard"], cwd=git_dir)
+
+        proc = subprocess.Popen(["git", "diff", "HEAD"], cwd=git_dir,
+                                stdout=subprocess.PIPE)
+        stdout = proc.communicate()[0]
+        if stdout != "":
+            print "Uncommitted changes (tree does not match HEAD) - aborting"
+            return
 
         # This is just to let us delete the "cp" branch.
         subprocess.check_call(["git", "checkout", start_point], cwd=git_dir)
@@ -80,6 +76,9 @@ def main(args):
                 rc = subprocess.call(["git", "cherry-pick", row["commit_id"]],
                                      cwd=git_dir)
                 if rc != 0:
+                    # Get the working copy out of the conflict state.
+                    subprocess.check_call(["git", "reset", "--hard"],
+                                          cwd=git_dir)
                     row["failing"] = True
                     break
         t1 = time.time()
@@ -98,10 +97,10 @@ def main(args):
                           #("foreground", bg_colour)
                           ])
     def clicked(cell, path):
-        print "clicked", path
         treeiter = model.get_iter(path)
         row = model.get_value(treeiter, 0)
         row["apply"] = not row["apply"]
+        save_applylist()
         apply_patches()
         model.row_changed(model.get_path(treeiter), treeiter)
 

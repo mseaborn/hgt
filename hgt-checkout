@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+
+import optparse
+import os
+import subprocess
+import sys
+import time
+
+import hgtlib
+
+
+def apply_patches(show_conflict):
+    git_dir = os.getcwd()
+    t0 = time.time()
+    commits, start_point = hgtlib.get_patches()
+    applylist = hgtlib.get_applylist()
+    for row in commits:
+        row["apply"] = applylist.get(row["commit_id"])
+
+    proc = subprocess.Popen(["git", "diff", "HEAD"], cwd=git_dir,
+                            stdout=subprocess.PIPE)
+    stdout = proc.communicate()[0]
+    if stdout != "":
+        print "Uncommitted changes (tree does not match HEAD) - aborting"
+        return
+
+    # This is just to let us delete the "cp" branch.
+    subprocess.check_call(["git", "checkout", start_point], cwd=git_dir)
+
+    subprocess.call(["git", "branch", "-D", "cp"], cwd=git_dir)
+    subprocess.check_call(["git", "checkout", "-b", "cp", start_point],
+                          cwd=git_dir)
+    for row in commits:
+        if row["apply"]:
+            rc = subprocess.call(["git", "cherry-pick", row["commit_id"]],
+                                 cwd=git_dir)
+            if rc != 0:
+                # Get the working copy out of the conflict state.
+                if not show_conflict:
+                    subprocess.check_call(["git", "reset", "--hard"],
+                                          cwd=git_dir)
+                print "** found conflict: %s" % row["msg"]
+                row["failing"] = True
+                break
+    t1 = time.time()
+    print "took %.2fs" % (t1 - t0)
+
+
+def main(args):
+    parser = optparse.OptionParser()
+    parser.add_option("-C", dest="conflict", action="store_true",
+                      help="Show conflict in working copy")
+    options, args = parser.parse_args(args)
+    if len(args) != 0:
+        parser.error("Unexpected arguments")
+    apply_patches(options.conflict)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
