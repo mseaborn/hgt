@@ -1,4 +1,5 @@
 
+import os
 import subprocess
 import sys
 import time
@@ -28,7 +29,12 @@ def get_patches():
 
 
 def main(args):
-    git_dir = args[0]
+    if len(args) == 0:
+        git_dir = os.getcwd()
+    elif len(args) == 1:
+        git_dir = args[0]
+    else:
+        raise Exception("Too many arguments")
 
     window = gtk.Window()
     window.set_default_size(500, 400)
@@ -117,7 +123,10 @@ def main(args):
                           ("foreground", bg_colour)])
     table.append_column(col)
 
-    window.add(table)
+    scrolled = gtk.ScrolledWindow()
+    scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+    scrolled.add(table)
+    window.add(scrolled)
     window.show_all()
     window.connect("hide", lambda *args: sys.exit(0))
     gtk.main()
