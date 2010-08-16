@@ -14,11 +14,23 @@ def make_widget(do_reload, git_dir):
     rows, start_point = hgtlib.get_patches()
     applylist = hgtlib.get_applylist()
 
-    model = gtk.ListStore(object)
+    model = gtk.TreeStore(object)
+
+    def add_element(parent, elt):
+        elt["failing"] = False
+        if "commit_id" in elt:
+            elt["apply_id"] = elt["commit_id"]
+            elt["apply"] = applylist.setdefault(elt["apply_id"], True)
+            model.append(parent, [elt])
+        else:
+            elt["apply_id"] = elt["group_id"]
+            elt["apply"] = applylist.setdefault(elt["apply_id"], True)
+            treeiter = model.append(parent, [elt])
+            for child in elt["patches"]:
+                add_element(treeiter, child)
+
     for row in rows:
-        row["apply"] = applylist.setdefault(row["commit_id"], True)
-        row["failing"] = False
-        model.append([row])
+        add_element(None, row)
 
     def map_cell(col, cell, prop, func):
         def setter(col, cell, model, treeiter):
@@ -37,53 +49,41 @@ def make_widget(do_reload, git_dir):
         filename = os.path.join(hgtlib.dotgit_dir(), "hgt-applylist")
         tmp_filename = "%s.new" % filename
         fh = open(tmp_filename, "w")
-        for row in rows:
+
+        def recurse(elt):
             tag = {True: "Apply",
-                   False: "Unapply"}[row["apply"]]
-            fh.write("%s %s %s\n" % (tag, row["commit_id"], row["msg"]))
+                   False: "Unapply"}[elt["apply"]]
+            fh.write("%s %s %s\n" % (tag, elt["apply_id"], elt.get("msg", "")))
+            if "patches" in elt:
+                for child in elt["patches"]:
+                    recurse(child)
+
+        for row in rows:
+            recurse(row)
         fh.close()
         os.rename(tmp_filename, filename)
 
+    def get_selected_patches():
+        got = []
+        def recurse(elt):
+            if elt["apply"]:
+                if "patches" in elt:
+                    for child in elt["patches"]:
+                        recurse(child)
+                else:
+                    got.append(elt)
+        for row in rows:
+            recurse(row)
+        return got
+
     def apply_patches():
-        t0 = time.time()
-
-        proc = subprocess.Popen(["git", "diff", "HEAD"], cwd=git_dir,
-                                stdout=subprocess.PIPE)
-        stdout = proc.communicate()[0]
-        if stdout != "":
-            print "Uncommitted changes (tree does not match HEAD) - aborting"
-            return
-
-        # This is just to let us delete the "cp" branch.
-        subprocess.check_call(["git", "checkout", start_point], cwd=git_dir)
-
-        subprocess.call(["git", "branch", "-D", "cp"], cwd=git_dir)
-        subprocess.check_call(["git", "checkout", "-b", "cp", start_point],
-                              cwd=git_dir)
-        for row in rows:
-            row["failing"] = False
-        failed = False
-        for row in rows:
-            if row["apply"]:
-                rc = subprocess.call(["git", "cherry-pick", row["commit_id"]],
-                                     cwd=git_dir)
-                if rc != 0:
-                    # Get the working copy out of the conflict state.
-                    subprocess.check_call(["git", "reset", "--hard"],
-                                          cwd=git_dir)
-                    row["failing"] = True
-                    failed = True
-                    break
-        t1 = time.time()
-        if failed:
-            label.set_text("Got conflict when applying selection")
-        else:
-            label.set_text("Applied selection OK")
-        print "took %.2fs" % (t1 - t0)
+        msg = hgtlib.apply_patches(start_point, get_selected_patches(),
+                                   git_dir, show_conflict=False)
+        label.set_text(msg)
 
     table = gtk.TreeView()
     table.set_model(model)
-    col = gtk.TreeViewColumn("")
+    col = gtk.TreeViewColumn("Patch list")
     cell = gtk.CellRendererToggle()
     col.pack_start(cell, expand=False)
     #col.add_attribute(cell, "active", 1)
@@ -102,19 +102,20 @@ def make_widget(do_reload, git_dir):
         model.row_changed(model.get_path(treeiter), treeiter)
     cell.connect("toggled", clicked)
     cell = gtk.CellRendererText()
-    table.append_column(col)
-
-    col = gtk.TreeViewColumn("Message")
     col.pack_start(cell)
     #col.add_attribute(cell, "text", 0)
     def get_msg(row):
-        msg = row["msg"]
-        if row["failing"]:
-            msg = "[CONFLICTING] " + msg
-        return msg
+        if "group_id" in row:
+            return row["group_id"]
+        else:
+            msg = row["msg"]
+            if row["failing"]:
+                msg = "[CONFLICTING] " + msg
+            return msg
     map_cell2(col, cell, [("text", get_msg), #lambda row: row["msg"]),
                           ("foreground", bg_colour)])
     table.append_column(col)
+    table.set_level_indentation(20)
 
     scrolled = gtk.ScrolledWindow()
     scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
@@ -153,6 +154,7 @@ def main(args):
         window.add(picker.make_widget(do_reload, git_dir))
 
     def do_reload():
+        print "Reloading"
         reload(picker)
         for widget in window.get_children():
             widget.destroy()

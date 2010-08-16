@@ -14,36 +14,28 @@ def apply_patches(show_conflict):
     t0 = time.time()
     commits, start_point = hgtlib.get_patches()
     applylist = hgtlib.get_applylist()
-    for row in commits:
-        row["apply"] = applylist.get(row["commit_id"])
 
-    proc = subprocess.Popen(["git", "diff", "HEAD"], cwd=git_dir,
-                            stdout=subprocess.PIPE)
-    stdout = proc.communicate()[0]
-    if stdout != "":
-        print "Uncommitted changes (tree does not match HEAD) - aborting"
-        return
+    def get_selected_patches():
+        got = []
+        def recurse(elt):
+            if "patches" in elt:
+                apply_id = elt["group_id"]
+            else:
+                apply_id = elt["commit_id"]
 
-    # This is just to let us delete the "cp" branch.
-    subprocess.check_call(["git", "checkout", start_point], cwd=git_dir)
+            if applylist.get(apply_id, True):
+                if "patches" in elt:
+                    for child in elt["patches"]:
+                        recurse(child)
+                else:
+                    got.append(elt)
+        for row in commits:
+            recurse(row)
+        return got
 
-    subprocess.call(["git", "branch", "-D", "cp"], cwd=git_dir)
-    subprocess.check_call(["git", "checkout", "-b", "cp", start_point],
-                          cwd=git_dir)
-    for row in commits:
-        if row["apply"]:
-            rc = subprocess.call(["git", "cherry-pick", row["commit_id"]],
-                                 cwd=git_dir)
-            if rc != 0:
-                # Get the working copy out of the conflict state.
-                if not show_conflict:
-                    subprocess.check_call(["git", "reset", "--hard"],
-                                          cwd=git_dir)
-                print "** found conflict: %s" % row["msg"]
-                row["failing"] = True
-                break
-    t1 = time.time()
-    print "took %.2fs" % (t1 - t0)
+    msg = hgtlib.apply_patches(start_point, get_selected_patches(),
+                               git_dir, show_conflict)
+    print msg
 
 
 def main(args):
