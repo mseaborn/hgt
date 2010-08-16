@@ -18,7 +18,7 @@ def main(args):
         raise Exception("Too many arguments")
 
     window = gtk.Window()
-    window.set_default_size(600, 500)
+    window.set_default_size(600, 800)
 
     rows, start_point = hgtlib.get_patches()
     applylist = hgtlib.get_applylist()
@@ -101,10 +101,6 @@ def main(args):
         row = model.get_value(treeiter, 0)
         row["apply"] = not row["apply"]
         save_applylist()
-        apply_patches()
-        model.row_changed(model.get_path(treeiter), treeiter)
-
-        treeiter = model.get_iter_root()
         model.row_changed(model.get_path(treeiter), treeiter)
     cell.connect("toggled", clicked)
     cell = gtk.CellRendererText()
@@ -125,7 +121,16 @@ def main(args):
     scrolled = gtk.ScrolledWindow()
     scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
     scrolled.add(table)
-    window.add(scrolled)
+
+    checkout_button = gtk.Button("Check out selection")
+    checkout_button.connect("clicked", lambda widget: apply_patches())
+    hbox = gtk.HBox()
+    hbox.pack_start(checkout_button, expand=False)
+    vbox = gtk.VBox()
+    vbox.pack_start(hbox, expand=False)
+    vbox.add(scrolled)
+
+    window.add(vbox)
     window.show_all()
     window.connect("hide", lambda *args: sys.exit(0))
     gtk.main()
