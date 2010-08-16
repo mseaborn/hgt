@@ -7,19 +7,10 @@ import time
 import gtk
 
 import hgtlib
+import picker
 
 
-def main(args):
-    if len(args) == 0:
-        git_dir = os.getcwd()
-    elif len(args) == 1:
-        git_dir = args[0]
-    else:
-        raise Exception("Too many arguments")
-
-    window = gtk.Window()
-    window.set_default_size(600, 800)
-
+def make_widget(do_reload, git_dir):
     rows, start_point = hgtlib.get_patches()
     applylist = hgtlib.get_applylist()
 
@@ -101,6 +92,7 @@ def main(args):
         row = model.get_value(treeiter, 0)
         row["apply"] = not row["apply"]
         save_applylist()
+        label.set_text("Selection changed")
         model.row_changed(model.get_path(treeiter), treeiter)
     cell.connect("toggled", clicked)
     cell = gtk.CellRendererText()
@@ -124,15 +116,44 @@ def main(args):
 
     checkout_button = gtk.Button("Check out selection")
     checkout_button.connect("clicked", lambda widget: apply_patches())
+    reload_button = gtk.Button("Reload")
+    reload_button.connect("clicked", lambda widget: do_reload())
+    label = gtk.Label("Loaded patch list")
     hbox = gtk.HBox()
     hbox.pack_start(checkout_button, expand=False)
+    hbox.pack_start(reload_button, expand=False)
+    hbox.pack_start(label, expand=False, padding=10)
     vbox = gtk.VBox()
     vbox.pack_start(hbox, expand=False)
     vbox.add(scrolled)
+    vbox.show_all()
+    return vbox
 
-    window.add(vbox)
-    window.show_all()
+
+def main(args):
+    if len(args) == 0:
+        git_dir = os.getcwd()
+    elif len(args) == 1:
+        git_dir = args[0]
+    else:
+        raise Exception("Too many arguments")
+
+    window = gtk.Window()
+    window.set_default_size(600, 800)
+    window.set_title("Patch picker")
     window.connect("hide", lambda *args: sys.exit(0))
+
+    def add_widget():
+        window.add(picker.make_widget(do_reload, git_dir))
+
+    def do_reload():
+        reload(picker)
+        for widget in window.get_children():
+            widget.destroy()
+        add_widget()
+
+    add_widget()
+    window.show()
     gtk.main()
 
 
