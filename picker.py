@@ -62,6 +62,7 @@ def make_widget(do_reload, git_dir):
                               cwd=git_dir)
         for row in rows:
             row["failing"] = False
+        failed = False
         for row in rows:
             if row["apply"]:
                 rc = subprocess.call(["git", "cherry-pick", row["commit_id"]],
@@ -71,8 +72,13 @@ def make_widget(do_reload, git_dir):
                     subprocess.check_call(["git", "reset", "--hard"],
                                           cwd=git_dir)
                     row["failing"] = True
+                    failed = True
                     break
         t1 = time.time()
+        if failed:
+            label.set_text("Got conflict when applying selection")
+        else:
+            label.set_text("Applied selection OK")
         print "took %.2fs" % (t1 - t0)
 
     table = gtk.TreeView()
