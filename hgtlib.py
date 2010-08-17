@@ -87,6 +87,25 @@ def get_applylist():
     return data
 
 
+def get_selected_patches(patches, applylist):
+    got = []
+    def recurse(elt):
+        if "patches" in elt:
+            apply_id = elt["group_id"]
+        else:
+            apply_id = elt["commit_id"]
+
+        if applylist.get(apply_id, True):
+            if "patches" in elt:
+                for child in elt["patches"]:
+                    recurse(child)
+            else:
+                got.append(elt)
+    for elt in patches:
+        recurse(elt)
+    return got
+
+
 def apply_patches(start_point, patches, git_dir, show_conflict):
     t0 = time.time()
 

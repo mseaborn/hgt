@@ -14,26 +14,8 @@ def apply_patches(show_conflict):
     t0 = time.time()
     commits, start_point = hgtlib.get_patches()
     applylist = hgtlib.get_applylist()
-
-    def get_selected_patches():
-        got = []
-        def recurse(elt):
-            if "patches" in elt:
-                apply_id = elt["group_id"]
-            else:
-                apply_id = elt["commit_id"]
-
-            if applylist.get(apply_id, True):
-                if "patches" in elt:
-                    for child in elt["patches"]:
-                        recurse(child)
-                else:
-                    got.append(elt)
-        for row in commits:
-            recurse(row)
-        return got
-
-    msg = hgtlib.apply_patches(start_point, get_selected_patches(),
+    msg = hgtlib.apply_patches(start_point,
+                               hgtlib.get_selected_patches(commits, applylist),
                                git_dir, show_conflict)
     print msg
 

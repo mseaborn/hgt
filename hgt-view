@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 
 import os
 import subprocess
@@ -45,39 +46,35 @@ def make_widget(do_reload, git_dir):
                 cell.set_property(prop, func(row))
         col.set_cell_data_func(cell, setter)
 
-    def save_applylist():
-        filename = os.path.join(hgtlib.dotgit_dir(), "hgt-applylist")
-        tmp_filename = "%s.new" % filename
-        fh = open(tmp_filename, "w")
+    def get_applylist():
+        # We return this as a list rather than a dictionary in order
+        # to preserve the tree order.
+        got = []
 
         def recurse(elt):
-            tag = {True: "Apply",
-                   False: "Unapply"}[elt["apply"]]
-            fh.write("%s %s %s\n" % (tag, elt["apply_id"], elt.get("msg", "")))
+            got.append((elt["apply_id"], elt["apply"]))
             if "patches" in elt:
                 for child in elt["patches"]:
                     recurse(child)
 
         for row in rows:
             recurse(row)
+        return got
+
+    def save_applylist():
+        filename = os.path.join(hgtlib.dotgit_dir(), "hgt-applylist")
+        tmp_filename = "%s.new" % filename
+        fh = open(tmp_filename, "w")
+        for apply_id, state in get_applylist():
+            tag = {True: "Apply",
+                   False: "Unapply"}[state]
+            fh.write("%s %s %s\n" % (tag, elt["apply_id"], elt.get("msg", "")))
         fh.close()
         os.rename(tmp_filename, filename)
 
-    def get_selected_patches():
-        got = []
-        def recurse(elt):
-            if elt["apply"]:
-                if "patches" in elt:
-                    for child in elt["patches"]:
-                        recurse(child)
-                else:
-                    got.append(elt)
-        for row in rows:
-            recurse(row)
-        return got
-
     def apply_patches():
-        msg = hgtlib.apply_patches(start_point, get_selected_patches(),
+        patches = hgtlib.get_selected_patches(rows, dict(get_applylist()))
+        msg = hgtlib.apply_patches(start_point, patches,
                                    git_dir, show_conflict=False)
         label.set_text(msg)
 
