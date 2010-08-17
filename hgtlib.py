@@ -106,7 +106,10 @@ def get_selected_patches(patches, applylist):
     return got
 
 
-def apply_patches(start_point, patches, git_dir, show_conflict):
+def apply_patches(start_point, patches, git_dir, show_conflict,
+                  dest_branch=None):
+    if dest_branch is None:
+        dest_branch = "cp"
     t0 = time.time()
 
     proc = subprocess.Popen(["git", "diff", "HEAD"], cwd=git_dir,
@@ -115,11 +118,18 @@ def apply_patches(start_point, patches, git_dir, show_conflict):
     if stdout != "":
         return "Uncommitted changes (tree does not match HEAD) - aborting"
 
-    # This is just to let us delete the "cp" branch.
+    # In case we are already on dest_branch, we need to switch away
+    # from the branch.  Otherwise, if update-ref has made a change,
+    # "git checkout dest_branch" will get confused because it will
+    # think it nothing has changed because it is not switching branch.
     subprocess.check_call(["git", "checkout", start_point], cwd=git_dir)
 
-    subprocess.call(["git", "branch", "-D", "cp"], cwd=git_dir)
-    subprocess.check_call(["git", "checkout", "-b", "cp", start_point],
+    # Using update-ref rather than "git branch -D" avoids deleting the
+    # reflog for the branch.
+    subprocess.check_call(
+        ["git", "update-ref", "-m", "HGT: Reset to start point",
+         "refs/heads/%s" % dest_branch, start_point], cwd=git_dir)
+    subprocess.check_call(["git", "checkout", dest_branch],
                           cwd=git_dir)
     failed = False
     for patch in patches:

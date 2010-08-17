@@ -4,30 +4,55 @@ import optparse
 import os
 import subprocess
 import sys
-import time
 
 import hgtlib
 
 
-def apply_patches(show_conflict):
-    git_dir = os.getcwd()
-    t0 = time.time()
-    commits, start_point = hgtlib.get_patches()
-    applylist = hgtlib.get_applylist()
-    msg = hgtlib.apply_patches(start_point,
-                               hgtlib.get_selected_patches(commits, applylist),
-                               git_dir, show_conflict)
-    print msg
+def find_group(patches, group_id):
+    got = []
+
+    def recurse(patches):
+        for patch in patches:
+            if "group_id" in patch:
+                if patch["group_id"] == group_id:
+                    got.append(patch["patches"])
+                recurse(patch["patches"])
+
+    recurse(patches)
+    if len(got) == 1:
+        return got[0]
+    elif len(got) == 0:
+        raise Exception("Group %r not found" % group_id)
+    else:
+        raise Exception("Found multiple groups named %r" % group_id)
 
 
 def main(args):
     parser = optparse.OptionParser()
-    parser.add_option("-C", dest="conflict", action="store_true",
+    parser.add_option("-C", dest="show_conflict", action="store_true",
                       help="Show conflict in working copy")
+    parser.add_option("-B", dest="branch",
+                      help="Set up a branch containing the named patch group. "
+                      "The branch is named after the group")
     options, args = parser.parse_args(args)
     if len(args) != 0:
         parser.error("Unexpected arguments")
-    apply_patches(options.conflict)
+
+    git_dir = os.getcwd()
+    patches, start_point = hgtlib.get_patches()
+    applylist = hgtlib.get_applylist()
+
+    if options.branch is not None:
+        patches = find_group(patches, options.branch)
+        dest_branch = options.branch
+    else:
+        dest_branch = None
+
+    msg = hgtlib.apply_patches(
+        start_point,
+        hgtlib.get_selected_patches(patches, applylist),
+        git_dir, show_conflict=options.show_conflict, dest_branch=dest_branch)
+    print msg
 
 
 if __name__ == "__main__":
