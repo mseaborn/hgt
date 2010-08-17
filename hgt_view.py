@@ -7,8 +7,8 @@ import time
 
 import gtk
 
+import hgt_view
 import hgtlib
-import picker
 
 
 def make_widget(do_reload, git_dir):
@@ -148,11 +148,12 @@ def main(args):
     window.connect("hide", lambda *args: sys.exit(0))
 
     def add_widget():
-        window.add(picker.make_widget(do_reload, git_dir))
+        window.add(hgt_view.make_widget(do_reload, git_dir))
 
     def do_reload():
         print "Reloading"
-        reload(picker)
+        reload(hgt_view)
+        reload(hgtlib)
         for widget in window.get_children():
             widget.destroy()
         add_widget()
