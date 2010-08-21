@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+
+import os
+import sys
+
+import hgtlib
+
+
+def write_default_file(filename, data):
+    if not os.path.exists(filename):
+        fh = open(filename, "a")
+        fh.write(data)
+        fh.close()
+
+
+def main(args):
+    if len(args) != 0:
+        print "Unexpected arguments"
+        sys.exit(1)
+    git_dir = hgtlib.dotgit_dir()
+    # TODO: We could use the tracking branch from the Git config
+    # instead of assuming git-svn here.
+    write_default_file(os.path.join(git_dir, "hgt-patches"),
+                       "\nStart git-svn\n\n")
+    write_default_file(os.path.join(git_dir, "hgt-applylist"), "")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
