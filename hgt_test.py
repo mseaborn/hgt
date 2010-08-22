@@ -115,7 +115,7 @@ class ToolTest(TempDirTestCase):
         test_file = os.path.join(temp_dir, "hello.c")
         for i, (msg, data) in enumerate(test_revisions):
             write_file(test_file, data)
-            run_cmd(["git", "add", test_file])
+            run_cmd(["git", "add", "hello.c"])
             if i == 0:
                 # Git treats the first commit specially.
                 run_cmd(["git", "commit", "-m", "Initial revision"])
