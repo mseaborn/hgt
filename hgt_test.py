@@ -72,10 +72,6 @@ Patch 2345 desc 2
         self.assertEquals(start, "git-svn")
 
 
-def hgt_cmd(name):
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
-
-
 test_revisions = [
     ("Initial commit", r"""
 #include <stdio.h>
@@ -115,7 +111,7 @@ class ToolTest(TempDirTestCase):
             subprocess.check_call(args, cwd=temp_dir, env=env)
 
         run_cmd(["git", "init", "-q"])
-        run_cmd([hgt_cmd("hgt-init")])
+        run_cmd(["hgt-init"])
         test_file = os.path.join(temp_dir, "hello.c")
         for i, (msg, data) in enumerate(test_revisions):
             write_file(test_file, data)
