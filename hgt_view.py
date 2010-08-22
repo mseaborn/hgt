@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
 import os
-import subprocess
 import sys
-import time
 
 import gtk
 
