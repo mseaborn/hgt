@@ -52,7 +52,7 @@ def make_widget(do_reload, git_dir):
         got = []
 
         def recurse(elt):
-            got.append((elt["apply_id"], elt["apply"]))
+            got.append((elt["apply_id"], elt["apply"], elt.get("msg", "")))
             if "patches" in elt:
                 for child in elt["patches"]:
                     recurse(child)
@@ -61,19 +61,15 @@ def make_widget(do_reload, git_dir):
             recurse(row)
         return got
 
+    def get_applylist_dict():
+        return dict((apply_id, state)
+                    for apply_id, state, msg in get_applylist())
+
     def save_applylist():
-        filename = os.path.join(hgtlib.dotgit_dir(), "hgt-applylist")
-        tmp_filename = "%s.new" % filename
-        fh = open(tmp_filename, "w")
-        for apply_id, state in get_applylist():
-            tag = {True: "Apply",
-                   False: "Unapply"}[state]
-            fh.write("%s %s %s\n" % (tag, elt["apply_id"], elt.get("msg", "")))
-        fh.close()
-        os.rename(tmp_filename, filename)
+        hgtlib.save_applylist(hgtlib.dotgit_dir(), get_applylist())
 
     def apply_patches():
-        patches = hgtlib.get_selected_patches(rows, dict(get_applylist()))
+        patches = hgtlib.get_selected_patches(rows, get_applylist_dict())
         msg = hgtlib.apply_patches(start_point, patches,
                                    git_dir, show_conflict=False)
         label.set_text(msg)

@@ -87,6 +87,18 @@ def get_applylist():
     return data
 
 
+def save_applylist(dotgit_dir, applylist):
+    filename = os.path.join(dotgit_dir, "hgt-applylist")
+    tmp_filename = "%s.new" % filename
+    fh = open(tmp_filename, "w")
+    for apply_id, state, msg in applylist:
+        tag = {True: "Apply",
+               False: "Unapply"}[state]
+        fh.write("%s %s %s\n" % (tag, apply_id, msg))
+    fh.close()
+    os.rename(tmp_filename, filename)
+
+
 def get_selected_patches(patches, applylist):
     got = []
     def recurse(elt):
