@@ -136,6 +136,20 @@ class ToolTest(TempDirTestCase):
                           ["Add friendly message",
                            "Use standard message"])
 
+        grouped_patches = [{"group_id": "add-message",
+                            "patches": patches}]
+        write_patch_list(temp_dir, grouped_patches, start_point)
+        before_id, after_id = hgtlib.get_before_and_after(
+            temp_dir, "add-message")
+        proc = subprocess.Popen(["git", "diff", before_id, after_id],
+                                cwd=temp_dir, stdout=subprocess.PIPE)
+        diff = proc.communicate()[0]
+        self.assertEquals(proc.wait(), 0)
+        diffs = [line for line in diff.split("\n")
+                 if line.startswith("+")
+                 and not line.startswith("+++ ")]
+        self.assertEquals(diffs, ['+  printf("hello world\\n");'])
+
         # Test selection that causes a conflict.
         dotgit_dir = os.path.join(temp_dir, ".git")
         hgtlib.save_applylist(dotgit_dir,
@@ -158,6 +172,24 @@ class ToolTest(TempDirTestCase):
         self.assertEquals(diffs,
                           ['++=======',
                            '+   printf("hello world\\n");'])
+
+
+def write_patch_list(git_dir, patches, start_point):
+    filename = os.path.join(hgtlib.dotgit_dir(git_dir), "hgt-patches")
+    fh = open(filename, "w")
+    fh.write("Start %s\n" % start_point)
+
+    def recurse(patches):
+        for patch in patches:
+            if "group_id" in patch:
+                fh.write("Group %s\n{\n" % patch["group_id"])
+                recurse(patch["patches"])
+                fh.write("}\n")
+            else:
+                fh.write("Patch %s %s\n" % (patch["commit_id"], patch["msg"]))
+
+    recurse(patches)
+    fh.close()
 
 
 if __name__ == "__main__":

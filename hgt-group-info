@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+
+import subprocess
+import sys
+
+import hgtlib
+
+
+def main(args):
+    before_id, after_id = hgtlib.get_before_and_after(".", args[0])
+    print before_id, after_id
+    subprocess.check_call(["git", "diff", before_id, after_id])
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
