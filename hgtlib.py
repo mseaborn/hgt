@@ -82,7 +82,9 @@ def get_applylist(git_dir="."):
         tag, commit_id, rest = line.split(" ", 2)
         do_apply = {"Apply": True,
                     "Unapply": False}[tag]
-        assert commit_id not in data
+        if commit_id in data:
+            raise AssertionError("Found duplicate in applylist: %r"
+                                 % commit_id)
         data[commit_id] = do_apply
     return data
 
