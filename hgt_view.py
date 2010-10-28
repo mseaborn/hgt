@@ -1,12 +1,20 @@
 #!/usr/bin/env python
 
 import os
+import subprocess
 import sys
 
 import gtk
 
 import hgt_view
 import hgtlib
+
+
+def get_git_config(git_dir, key):
+    proc = subprocess.Popen(["git", "config", key], stdout=subprocess.PIPE)
+    stdout = proc.communicate()[0]
+    assert proc.wait() in (0, 1)
+    return stdout.rstrip("\n")
 
 
 def make_widget(do_reload, git_dir):
@@ -17,6 +25,7 @@ def make_widget(do_reload, git_dir):
 
     def add_element(parent, elt):
         elt["failing"] = False
+        elt["review"] = ""
         if "commit_id" in elt:
             elt["apply_id"] = elt["commit_id"]
             elt["apply"] = applylist.setdefault(elt["apply_id"], True)
@@ -27,6 +36,12 @@ def make_widget(do_reload, git_dir):
             treeiter = model.append(parent, [elt])
             for child in elt["patches"]:
                 add_element(treeiter, child)
+            if get_git_config(git_dir, "branch.%s.rietveldclosed"
+                              % elt["group_id"]) == "yes":
+                elt["review"] = "Committed"
+            elif get_git_config(git_dir, "branch.%s.rietveldissue"
+                                % elt["group_id"]) != "":
+                elt["review"] = "Uploaded"
 
     for row in rows:
         add_element(None, row)
@@ -107,6 +122,12 @@ def make_widget(do_reload, git_dir):
                           ("foreground", bg_colour)])
     table.append_column(col)
     table.set_level_indentation(20)
+
+    col = gtk.TreeViewColumn("Status")
+    cell = gtk.CellRendererText()
+    col.pack_start(cell)
+    map_cell(col, cell, "text", lambda row: row["review"])
+    table.append_column(col)
 
     scrolled = gtk.ScrolledWindow()
     scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
